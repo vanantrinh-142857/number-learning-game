@@ -181,6 +181,15 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         
+        // Create a single AudioContext for all sound effects
+        let audioCtx;
+        try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+            console.log('Audio not available');
+            audioCtx = null;
+        }
+        
         let gameState = {
             running: false,
             paused: false,
@@ -323,16 +332,18 @@
         
         // Keyboard input
         window.addEventListener('keydown', (e) => {
-            if (!gameState.running || gameState.paused) return;
+            if (!gameState.running) return;
             
             const key = e.key;
             
-            // ESC to pause
+            // ESC to pause/unpause
             if (key === 'Escape') {
-                gameState.paused = true;
-                document.getElementById('stopBtn').textContent = '▶️ RESUME';
+                gameState.paused = !gameState.paused;
+                document.getElementById('stopBtn').textContent = gameState.paused ? '▶️ RESUME' : '⏸️ STOP';
                 return;
             }
+            
+            if (gameState.paused) return;
             
             if (key >= '0' && key <= '9') {
                 const targetNumber = parseInt(key);
@@ -384,8 +395,9 @@
         
         // Play hit sound
         function playHitSound() {
+            if (!audioCtx) return;
+            
             try {
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const oscillator = audioCtx.createOscillator();
                 const gainNode = audioCtx.createGain();
                 
@@ -401,15 +413,15 @@
                 oscillator.start(audioCtx.currentTime);
                 oscillator.stop(audioCtx.currentTime + 0.1);
             } catch (e) {
-                // Silently fail if audio context cannot be created
-                console.log('Audio not available');
+                console.log('Error playing sound:', e);
             }
         }
         
         // Play game over sound
         function playGameOverSound() {
+            if (!audioCtx) return;
+            
             try {
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const oscillator = audioCtx.createOscillator();
                 const gainNode = audioCtx.createGain();
                 
@@ -425,8 +437,7 @@
                 oscillator.start(audioCtx.currentTime);
                 oscillator.stop(audioCtx.currentTime + 0.5);
             } catch (e) {
-                // Silently fail if audio context cannot be created
-                console.log('Audio not available');
+                console.log('Error playing sound:', e);
             }
         }
         
