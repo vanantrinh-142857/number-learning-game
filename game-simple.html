@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Học Số - Cải Tiến</title>
+    <style>
+        /* Modern gradient background */
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        
+        #gameContainer {
+            position: relative;
+        }
+        
+        /* Control buttons */
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-right: 10px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0,0,0,0.4);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        #startBtn {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        #stopBtn {
+            background: #f44336;
+            color: white;
+            display: none;
+        }
+        
+        /* Stats display */
+        #stats {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 18px;
+            background: rgba(0,0,0,0.6);
+            padding: 15px;
+            border-radius: 10px;
+            z-index: 10;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        #stats > div {
+            margin: 5px 0;
+        }
+        
+        /* Canvas */
+        canvas {
+            display: block;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+        }
+        
+        /* Bottom instructions */
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 14px;
+            background: rgba(0,0,0,0.6);
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-align: center;
+            z-index: 10;
+        }
+        
+        /* Game over screen */
+        #gameOver {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            z-index: 100;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+        
+        #gameOver h1 {
+            font-size: 48px;
+            margin: 0 0 20px 0;
+            color: #ff6b6b;
+        }
+        
+        #gameOver p {
+            font-size: 20px;
+            margin: 10px 0;
+        }
+        
+        #restartBtn {
+            background: #4CAF50;
+            color: white;
+            font-size: 20px;
+            padding: 15px 30px;
+            margin-top: 20px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        #restartBtn:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0,0,0,0.4);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="controls">
+            <button id="startBtn" class="btn">▶️ START</button>
+            <button id="stopBtn" class="btn">⏸️ STOP</button>
+        </div>
+        
+        <div id="stats">
+            <div>💚 Máu: <span id="health">10</span></div>
+            <div>❌ Sai: <span id="missed">0</span>/100</div>
+            <div>✅ Trúng: <span id="hits">0</span></div>
+        </div>
+        
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div id="instructions">
+            Nhấn số 0-9 để bắn | ESC = Tạm dừng
+        </div>
+        
+        <div id="gameOver">
+            <h1>🎮 GAME OVER! 🎮</h1>
+            <p id="finalScore"></p>
+            <button id="restartBtn">Chơi Lại</button>
+        </div>
+    </div>
+    
+    <script>
+        // Game variables
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Create a single AudioContext for all sound effects
+        let audioCtx;
+        try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+            console.log('Audio not available');
+            audioCtx = null;
+        }
+        
+        let gameState = {
+            running: false,
+            paused: false,
+            health: 10,
+            maxHealth: 10,
+            hits: 0,
+            missed: 0,
+            maxMissed: 100
+        };
+        
+        let fallingNumbers = [];
+        let numberSpeed = 2;
+        let spawnInterval;
+        let animationId;
+        
+        // START button
+        document.getElementById('startBtn').addEventListener('click', () => {
+            if (!gameState.running) {
+                gameState.running = true;
+                gameState.paused = false;
+                document.getElementById('startBtn').style.display = 'none';
+                document.getElementById('stopBtn').style.display = 'inline-block';
+                startGame();
+            }
+        });
+        
+        // STOP button
+        document.getElementById('stopBtn').addEventListener('click', () => {
+            gameState.paused = !gameState.paused;
+            document.getElementById('stopBtn').textContent = gameState.paused ? '▶️ RESUME' : '⏸️ STOP';
+        });
+        
+        // Restart button
+        document.getElementById('restartBtn').addEventListener('click', () => {
+            location.reload();
+        });
+        
+        // Start game
+        function startGame() {
+            // Spawn numbers every 800ms
+            spawnInterval = setInterval(() => {
+                if (!gameState.paused && gameState.running) {
+                    spawnNumber();
+                }
+            }, 800);
+            
+            gameLoop();
+        }
+        
+        // Spawn a new falling number
+        function spawnNumber() {
+            const number = Math.floor(Math.random() * 10);
+            const x = Math.random() * (canvas.width - 60) + 30;
+            const colors = ['#FF6B6B', '#FFA07A', '#FFD93D', '#6BCF7F', '#4ECDC4', '#45B7D1', '#A78BFA', '#FB6B9B', '#FBBF24', '#34D399'];
+            
+            fallingNumbers.push({
+                value: number,
+                x: x,
+                y: -30,
+                speed: numberSpeed,
+                color: colors[number]
+            });
+        }
+        
+        // Main game loop
+        function gameLoop() {
+            if (!gameState.running) return;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw gun at bottom center
+            drawGun();
+            
+            if (!gameState.paused) {
+                // Update and draw falling numbers
+                for (let i = fallingNumbers.length - 1; i >= 0; i--) {
+                    const num = fallingNumbers[i];
+                    num.y += num.speed;
+                    
+                    // Draw number
+                    ctx.fillStyle = num.color;
+                    ctx.font = 'bold 40px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+                    ctx.shadowBlur = 4;
+                    ctx.fillText(num.value, num.x, num.y);
+                    ctx.shadowBlur = 0;
+                    
+                    // Check if reached bottom
+                    if (num.y > canvas.height) {
+                        fallingNumbers.splice(i, 1);
+                        gameState.health--;
+                        updateUI();
+                        
+                        if (gameState.health <= 0) {
+                            endGame('Hết máu!');
+                        }
+                    }
+                }
+            } else {
+                // Still draw numbers when paused but don't update positions
+                for (let i = 0; i < fallingNumbers.length; i++) {
+                    const num = fallingNumbers[i];
+                    ctx.fillStyle = num.color;
+                    ctx.font = 'bold 40px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+                    ctx.shadowBlur = 4;
+                    ctx.fillText(num.value, num.x, num.y);
+                    ctx.shadowBlur = 0;
+                }
+                
+                // Draw pause text
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 48px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('⏸️ PAUSED', canvas.width / 2, canvas.height / 2);
+            }
+            
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        // Draw gun
+        function drawGun() {
+            const gunX = canvas.width / 2;
+            const gunY = canvas.height - 40;
+            
+            // Gun body
+            ctx.fillStyle = '#555';
+            ctx.fillRect(gunX - 30, gunY, 60, 20);
+            
+            // Gun barrel
+            ctx.fillStyle = '#333';
+            ctx.fillRect(gunX - 5, gunY - 20, 10, 20);
+            
+            // Gun highlight
+            ctx.fillStyle = '#777';
+            ctx.fillRect(gunX - 25, gunY + 2, 50, 8);
+        }
+        
+        // Keyboard input
+        window.addEventListener('keydown', (e) => {
+            if (!gameState.running) return;
+            
+            const key = e.key;
+            
+            // ESC to pause/unpause
+            if (key === 'Escape') {
+                gameState.paused = !gameState.paused;
+                document.getElementById('stopBtn').textContent = gameState.paused ? '▶️ RESUME' : '⏸️ STOP';
+                return;
+            }
+            
+            if (gameState.paused) return;
+            
+            if (key >= '0' && key <= '9') {
+                const targetNumber = parseInt(key);
+                let hit = false;
+                
+                // Check if number exists
+                for (let i = 0; i < fallingNumbers.length; i++) {
+                    if (fallingNumbers[i].value === targetNumber) {
+                        // HIT!
+                        playHitSound();
+                        gameState.hits++;
+                        
+                        // Visual feedback - create explosion effect
+                        createExplosion(fallingNumbers[i].x, fallingNumbers[i].y);
+                        
+                        fallingNumbers.splice(i, 1);
+                        hit = true;
+                        break;
+                    }
+                }
+                
+                // MISS
+                if (!hit) {
+                    gameState.missed++;
+                    if (gameState.missed >= gameState.maxMissed) {
+                        endGame('Bắn sai quá 100 lần!');
+                    }
+                }
+                
+                updateUI();
+            }
+        });
+        
+        // Create explosion effect
+        function createExplosion(x, y) {
+            // Simple visual feedback by drawing a circle
+            ctx.fillStyle = 'rgba(255, 255, 0, 0.6)';
+            ctx.beginPath();
+            ctx.arc(x, y, 30, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Update UI
+        function updateUI() {
+            document.getElementById('health').textContent = gameState.health;
+            document.getElementById('missed').textContent = gameState.missed;
+            document.getElementById('hits').textContent = gameState.hits;
+        }
+        
+        // Play hit sound
+        function playHitSound() {
+            if (!audioCtx) return;
+            
+            try {
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                
+                oscillator.start(audioCtx.currentTime);
+                oscillator.stop(audioCtx.currentTime + 0.1);
+            } catch (e) {
+                console.log('Error playing sound:', e);
+            }
+        }
+        
+        // Play game over sound
+        function playGameOverSound() {
+            if (!audioCtx) return;
+            
+            try {
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                oscillator.frequency.value = 200;
+                oscillator.type = 'sawtooth';
+                
+                gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                
+                oscillator.start(audioCtx.currentTime);
+                oscillator.stop(audioCtx.currentTime + 0.5);
+            } catch (e) {
+                console.log('Error playing sound:', e);
+            }
+        }
+        
+        // End game
+        function endGame(message) {
+            gameState.running = false;
+            clearInterval(spawnInterval);
+            cancelAnimationFrame(animationId);
+            
+            playGameOverSound();
+            
+            document.getElementById('finalScore').innerHTML = `
+                ${message}<br>
+                ✅ Trúng: ${gameState.hits}<br>
+                ❌ Sai: ${gameState.missed}
+            `;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
