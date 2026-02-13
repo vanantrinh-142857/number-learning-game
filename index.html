@@ -3,24 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Number Learning Game</title>
-    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <title>Falling Numbers Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babylon.js/4.2.0/babylon.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
 </head>
 <body>
-    <h1>Welcome to the Number Learning Game!</h1>
-    <p>Learn numbers while playing with this engaging Babylon.js game.</p>
     <script>
-        // Your game logic using Babylon.js goes here
-        var createScene = function () {
-            var scene = new BABYLON.Scene(engine);
-            // Game setup code
-            return scene;
-        };
-        var engine = new BABYLON.Engine(canvas, true);
-        var scene = createScene();
-        engine.runRenderLoop(function () {
-            scene.render();
+        const canvas = document.createElement('canvas');
+        document.body.appendChild(canvas);
+        const engine = new BABYLON.Engine(canvas, true);
+
+        let scene, health = 10, missedShots = 0;
+        const fallingNumbers = [];
+
+        function createScene() {
+            scene = new BABYLON.Scene(engine);
+            const camera = new BABYLON.ArcRotateCamera("camera", 0, 0.5, 10, new BABYLON.Vector3(0, 0, 0), scene);
+            camera.attachControl(canvas, true);
+            new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(0, 1, 0), scene);
+
+            // Create numbers
+            setInterval(() => {
+                const number = Math.floor(Math.random() * 10);
+                const numberMesh = BABYLON.MeshBuilder.CreatePlane(number.toString(), {size: 1}, scene);
+                numberMesh.position.x = (Math.random() - 0.5) * 8;
+                numberMesh.position.y = 5;
+                numberMesh.value = number;
+                fallingNumbers.push(numberMesh);
+            }, 1000);
+
+            engine.runRenderLoop(() => {
+                for (let i = 0; i < fallingNumbers.length; i++) {
+                    fallingNumbers[i].position.y -= 0.05;
+                    if (fallingNumbers[i].position.y < -5) {
+                        missedShots++;
+                        fallingNumbers[i].dispose();
+                        fallingNumbers.splice(i, 1);
+                        i--;
+                        if (missedShots >= 100) {
+                            alert('Game Over! Total Missed Shots: ' + missedShots);
+                            resetGame();
+                        }
+                    }
+                }
+                scene.render();
+            });
+        }
+
+        function resetGame() {
+            fallingNumbers.forEach(num => num.dispose());
+            fallingNumbers.length = 0;
+            health = 10;
+            missedShots = 0;
+            alert('Game Reset!');
+        }
+
+        window.addEventListener('keydown', (evt) => {
+            if (evt.key >= '0' && evt.key <= '9') {
+                const number = parseInt(evt.key);
+                for (let i = 0; i < fallingNumbers.length; i++) {
+                    if (fallingNumbers[i].value === number) {
+                        const numberMesh = fallingNumbers[i];
+                        numberMesh.scaling.x *= 2;
+                        numberMesh.scaling.y *= 2;
+                        const msg = new SpeechSynthesisUtterance(evt.key);
+                        msg.lang = 'vi-VN';
+                        window.speechSynthesis.speak(msg);
+                        numberMesh.dispose();
+                        fallingNumbers.splice(i, 1);
+                        return;
+                    }
+                }
+            }
         });
+
+        createScene();
     </script>
 </body>
 </html>
