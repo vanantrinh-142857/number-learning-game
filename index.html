@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Number Learning Game</title>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+</head>
+<body>
+    <h1>Welcome to the Number Learning Game!</h1>
+    <p>Learn numbers while playing with this engaging Babylon.js game.</p>
+    <script>
+        // Your game logic using Babylon.js goes here
+        var createScene = function () {
+            var scene = new BABYLON.Scene(engine);
+            // Game setup code
+            return scene;
+        };
+        var engine = new BABYLON.Engine(canvas, true);
+        var scene = createScene();
+        engine.runRenderLoop(function () {
+            scene.render();
+        });
+    </script>
+</body>
+</html>
