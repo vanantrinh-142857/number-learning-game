@@ -1,85 +1,538 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Falling Numbers Game</title>
+    <title>Trò Chơi Học Số - Number Learning Game</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babylon.js/4.2.0/babylon.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babylon.js/4.2.0/babylon.loaders.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; }
-        canvas { display: block; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #uiContainer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        #topBar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px 20px;
+            border-radius: 10px;
+            color: white;
+            font-size: 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+        
+        #healthBarContainer {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            width: 300px;
+            height: 30px;
+            overflow: hidden;
+            border: 2px solid white;
+        }
+        
+        #healthBar {
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            height: 100%;
+            width: 100%;
+            border-radius: 8px;
+            transition: width 0.3s ease;
+        }
+        
+        #stats {
+            display: flex;
+            gap: 40px;
+            font-weight: bold;
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 16px;
+            z-index: 10;
+        }
+        
+        #gameOverScreen {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 100;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 36px;
+            text-align: center;
+            pointer-events: auto;
+        }
+        
+        #gameOverScreen h1 {
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+        
+        #gameOverScreen p {
+            font-size: 24px;
+            margin: 10px 0;
+        }
+        
+        #restartBtn {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.3s;
+            pointer-events: auto;
+        }
+        
+        #restartBtn:hover {
+            background: #45a049;
+        }
+        
+        .number-text {
+            position: absolute;
+            color: white;
+            font-size: 32px;
+            font-weight: bold;
+            pointer-events: none;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
     </style>
 </head>
 <body>
+    <div id="uiContainer">
+        <div id="topBar">
+            <div id="stats">
+                <div>💚 Máu: <span id="healthValue">10</span></div>
+                <div>❌ Sai: <span id="missedValue">0</span>/100</div>
+                <div>✅ Trúng: <span id="hitValue">0</span></div>
+            </div>
+            <div id="healthBarContainer">
+                <div id="healthBar"></div>
+            </div>
+        </div>
+        
+        <div id="instructions">
+            🎮 Nhấn phím số (0-9) để bắn vào số rơi xuống | Trúng = Số phình to + Âm thanh<br>
+            Sai 100 lần hoặc số vượt quá khung = Trò chơi kết thúc
+        </div>
+        
+        <div id="gameOverScreen">
+            <h1>🎮 GAME OVER! 🎮</h1>
+            <p id="gameOverMessage"></p>
+            <p>Tổng số lần bắn sai: <span id="totalMissed">0</span>/100</p>
+            <p>Tổng số trúng: <span id="totalHit">0</span></p>
+            <button id="restartBtn">Chơi Lại</button>
+        </div>
+    </div>
+
     <script>
-        const canvas = document.createElement('canvas');
-        document.body.appendChild(canvas);
+        // ============ GAME CONFIGURATION ============
+        const canvas = document.querySelector('canvas') || document.createElement('canvas');
+        if (!document.querySelector('canvas')) document.body.appendChild(canvas);
+        
         const engine = new BABYLON.Engine(canvas, true);
-
-        let scene, health = 10, missedShots = 0;
+        let scene;
+        
+        // Game state
+        let gameState = {
+            health: 10,
+            maxHealth: 10,
+            missedShots: 0,
+            maxMissed: 100,
+            hitShots: 0,
+            gameOver: false,
+            numberSpeed: 0.05
+        };
+        
         const fallingNumbers = [];
-
+        const bullets = [];
+        let gunMesh, gunBarrel;
+        
+        // ============ CREATE SCENE ============
         function createScene() {
             scene = new BABYLON.Scene(engine);
-            const camera = new BABYLON.ArcRotateCamera("camera", 0, 0.5, 10, new BABYLON.Vector3(0, 0, 0), scene);
+            scene.clearColor = new BABYLON.Color3(0.2, 0.3, 0.5);
+            scene.collisionsEnabled = true;
+            
+            // Camera
+            const camera = new BABYLON.ArcRotateCamera(
+                "camera",
+                Math.PI / 2,
+                Math.PI / 2.5,
+                20,
+                new BABYLON.Vector3(0, 2, 0),
+                scene
+            );
             camera.attachControl(canvas, true);
-            new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(0, 1, 0), scene);
-
-            // Create numbers
-            setInterval(() => {
-                const number = Math.floor(Math.random() * 10);
-                const numberMesh = BABYLON.MeshBuilder.CreatePlane(number.toString(), {size: 1}, scene);
-                numberMesh.position.x = (Math.random() - 0.5) * 8;
-                numberMesh.position.y = 5;
-                numberMesh.value = number;
-                fallingNumbers.push(numberMesh);
-            }, 1000);
-
+            camera.inertia = 0.7;
+            camera.angularSensibility = 1000;
+            
+            // Lights
+            const light1 = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(0, 1, 0), scene);
+            light1.intensity = 0.8;
+            
+            const light2 = new BABYLON.PointLight("light2", new BABYLON.Vector3(5, 10, 5), scene);
+            light2.intensity = 0.5;
+            
+            // Background/Ground
+            const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 20, height: 20 }, scene);
+            const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
+            groundMat.diffuse = new BABYLON.Color3(0.2, 0.4, 0.6);
+            ground.material = groundMat;
+            
+            // Create sky
+            const skybox = BABYLON.MeshBuilder.CreateBox("skybox", { size: 100 }, scene);
+            const skyboxMat = new BABYLON.StandardMaterial("skybox", scene);
+            skyboxMat.backFaceCulling = false;
+            skyboxMat.emissiveColor = new BABYLON.Color3(0.1, 0.15, 0.3);
+            skybox.material = skyboxMat;
+            
+            // Create gun
+            createGun();
+            
+            // Spawn numbers
+            spawnNumbersInterval();
+            
+            // Render loop
             engine.runRenderLoop(() => {
-                for (let i = 0; i < fallingNumbers.length; i++) {
-                    fallingNumbers[i].position.y -= 0.05;
-                    if (fallingNumbers[i].position.y < -5) {
-                        missedShots++;
-                        fallingNumbers[i].dispose();
-                        fallingNumbers.splice(i, 1);
-                        i--;
-                        if (missedShots >= 100) {
-                            alert('Game Over! Total Missed Shots: ' + missedShots);
-                            resetGame();
-                        }
-                    }
+                if (!gameState.gameOver) {
+                    updateGame();
+                    scene.render();
+                } else {
+                    scene.render();
                 }
-                scene.render();
             });
         }
-
-        function resetGame() {
-            fallingNumbers.forEach(num => num.dispose());
-            fallingNumbers.length = 0;
-            health = 10;
-            missedShots = 0;
-            alert('Game Reset!');
+        
+        // ============ CREATE GUN ============
+        function createGun() {
+            // Gun body
+            const gunBody = BABYLON.MeshBuilder.CreateBox("gunBody", { width: 0.4, height: 0.2, depth: 1 }, scene);
+            gunBody.position = new BABYLON.Vector3(0, -3, 0);
+            
+            const gunMat = new BABYLON.StandardMaterial("gunMat", scene);
+            gunMat.diffuse = new BABYLON.Color3(0.2, 0.2, 0.2);
+            gunMat.specularColor = new BABYLON.Color3(0.5, 0.5, 0.5);
+            gunBody.material = gunMat;
+            
+            // Barrel
+            gunBarrel = BABYLON.MeshBuilder.CreateCylinder("barrel", { diameter: 0.15, height: 0.8, tessellation: 16 }, scene);
+            gunBarrel.rotation.z = Math.PI / 2;
+            gunBarrel.position = new BABYLON.Vector3(0, -3, 0.5);
+            gunBarrel.parent = gunBody;
+            
+            const barrelMat = new BABYLON.StandardMaterial("barrelMat", scene);
+            barrelMat.diffuse = new BABYLON.Color3(0.3, 0.3, 0.3);
+            gunBarrel.material = barrelMat;
+            
+            gunMesh = gunBody;
         }
-
+        
+        // ============ SPAWN NUMBERS ============
+        function spawnNumbersInterval() {
+            setInterval(() => {
+                if (!gameState.gameOver) {
+                    spawnNumber();
+                }
+            }, 800);
+        }
+        
+        function spawnNumber() {
+            const number = Math.floor(Math.random() * 10);
+            const xPos = (Math.random() - 0.5) * 12;
+            
+            // Create sphere for number
+            const sphere = BABYLON.MeshBuilder.CreateSphere("number_" + number, { diameter: 0.8, segments: 16 }, scene);
+            sphere.position = new BABYLON.Vector3(xPos, 8, 0);
+            
+            // Material with color
+            const sphereMat = new BABYLON.StandardMaterial("numberMat_" + Math.random(), scene);
+            const colors = [
+                new BABYLON.Color3(1, 0.2, 0.2),    // 0 - Red
+                new BABYLON.Color3(1, 0.5, 0),      // 1 - Orange
+                new BABYLON.Color3(1, 1, 0),        // 2 - Yellow
+                new BABYLON.Color3(0.2, 1, 0.2),    // 3 - Green
+                new BABYLON.Color3(0, 1, 1),        // 4 - Cyan
+                new BABYLON.Color3(0.2, 0.5, 1),    // 5 - Light Blue
+                new BABYLON.Color3(0.5, 0, 1),      // 6 - Purple
+                new BABYLON.Color3(1, 0.2, 1),      // 7 - Magenta
+                new BABYLON.Color3(1, 0.8, 0),      // 8 - Gold
+                new BABYLON.Color3(0.5, 1, 0.5)     // 9 - Light Green
+            ];
+            sphereMat.diffuse = colors[number];
+            sphereMat.specularColor = new BABYLON.Color3(1, 1, 1);
+            sphere.material = sphereMat;
+            
+            // Text label
+            const dynamicTexture = new BABYLON.DynamicTexture("texture_" + number, 512, scene);
+            dynamicTexture.drawText(number.toString(), 256, 256, "bold 200px Arial", "white", "transparent");
+            
+            const textMat = new BABYLON.StandardMaterial("textMat_" + Math.random(), scene);
+            textMat.emissiveTexture = dynamicTexture;
+            sphere.material = textMat;
+            
+            fallingNumbers.push({
+                mesh: sphere,
+                value: number,
+                speed: gameState.numberSpeed,
+                originalScale: 1
+            });
+        }
+        
+        // ============ SHOOT BULLET ============
+        function shootBullet() {
+            const bullet = BABYLON.MeshBuilder.CreateSphere("bullet", { diameter: 0.2, segments: 8 }, scene);
+            bullet.position = gunBarrel.getAbsolutePosition();
+            
+            const bulletMat = new BABYLON.StandardMaterial("bulletMat", scene);
+            bulletMat.emissiveColor = new BABYLON.Color3(1, 1, 0);
+            bullet.material = bulletMat;
+            
+            // Sound effect
+            playShootSound();
+            
+            bullets.push({
+                mesh: bullet,
+                velocity: new BABYLON.Vector3(0, 8, 0),
+                lifetime: 0
+            });
+        }
+        
+        // ============ UPDATE GAME ============
+        function updateGame() {
+            // Update falling numbers
+            for (let i = fallingNumbers.length - 1; i >= 0; i--) {
+                const num = fallingNumbers[i];
+                num.mesh.position.y -= num.speed;
+                
+                // Check if number passed bottom
+                if (num.mesh.position.y < -5) {
+                    num.mesh.dispose();
+                    fallingNumbers.splice(i, 1);
+                    damageHealth();
+                    continue;
+                }
+            }
+            
+            // Update bullets
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                bullet.mesh.position.addInPlace(bullet.velocity.scale(0.016));
+                bullet.lifetime++;
+                
+                // Check collision with numbers
+                for (let j = fallingNumbers.length - 1; j >= 0; j--) {
+                    const num = fallingNumbers[j];
+                    const distance = BABYLON.Vector3.Distance(bullet.mesh.position, num.mesh.position);
+                    
+                    if (distance < 0.6) {
+                        // HIT!
+                        hitNumber(num, bullet);
+                        bullet.mesh.dispose();
+                        bullets.splice(i, 1);
+                        break;
+                    }
+                }
+                
+                // Remove bullet if too far
+                if (bullet.lifetime > 200 || bullet.mesh.position.y > 15) {
+                    bullet.mesh.dispose();
+                    bullets.splice(i, 1);
+                }
+            }
+        }
+        
+        // ============ HIT NUMBER ============
+        function hitNumber(numObj, bulletObj) {
+            // Scale up animation
+            const originalScale = numObj.mesh.scaling.x;
+            numObj.mesh.scaling = new BABYLON.Vector3(originalScale * 2, originalScale * 2, originalScale * 2);
+            
+            // Speak number
+            speakVietnamese(numObj.value);
+            
+            // Add score
+            gameState.hitShots++;
+            updateUI();
+            
+            // Remove number after a moment
+            setTimeout(() => {
+                numObj.mesh.dispose();
+                const idx = fallingNumbers.indexOf(numObj);
+                if (idx > -1) fallingNumbers.splice(idx, 1);
+            }, 600);
+        }
+        
+        // ============ DAMAGE HEALTH ============
+        function damageHealth() {
+            gameState.missedShots++;
+            gameState.health--;
+            
+            updateUI();
+            
+            if (gameState.missedShots >= gameState.maxMissed) {
+                endGame("Bạn nhấn sai quá nhiều lần!");
+            }
+        }
+        
+        // ============ KEYBOARD INPUT ============
         window.addEventListener('keydown', (evt) => {
-            if (evt.key >= '0' && evt.key <= '9') {
-                const number = parseInt(evt.key);
-                for (let i = 0; i < fallingNumbers.length; i++) {
-                    if (fallingNumbers[i].value === number) {
-                        const numberMesh = fallingNumbers[i];
-                        numberMesh.scaling.x *= 2;
-                        numberMesh.scaling.y *= 2;
-                        const msg = new SpeechSynthesisUtterance(evt.key);
-                        msg.lang = 'vi-VN';
-                        window.speechSynthesis.speak(msg);
-                        numberMesh.dispose();
-                        fallingNumbers.splice(i, 1);
-                        return;
+            if (gameState.gameOver) return;
+            
+            const key = evt.key;
+            if (key >= '0' && key <= '9') {
+                const number = parseInt(key);
+                
+                // Check if this number exists in falling numbers
+                let found = false;
+                for (let num of fallingNumbers) {
+                    if (num.value === number) {
+                        shootBullet();
+                        found = true;
+                        break;
+                    }
+                }
+                
+                // If no matching number, count as miss
+                if (!found && fallingNumbers.length > 0) {
+                    gameState.missedShots++;
+                    updateUI();
+                    
+                    if (gameState.missedShots >= gameState.maxMissed) {
+                        endGame("Bạn nhấn sai quá nhiều lần!");
                     }
                 }
             }
         });
-
+        
+        // ============ SPEAK VIETNAMESE ============
+        function speakVietnamese(number) {
+            const vietnameseNumbers = [
+                'không', 'một', 'hai', 'ba', 'bốn',
+                'năm', 'sáu', 'bảy', 'tám', 'chín'
+            ];
+            
+            const utterance = new SpeechSynthesisUtterance(vietnameseNumbers[number]);
+            utterance.lang = 'vi-VN';
+            utterance.rate = 1;
+            utterance.pitch = 1.2;
+            window.speechSynthesis.speak(utterance);
+        }
+        
+        // ============ PLAY SHOOT SOUND ============
+        function playShootSound() {
+            // Simple beep using Web Audio API
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 800;
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.1);
+        }
+        
+        // ============ UPDATE UI ============
+        function updateUI() {
+            document.getElementById('healthValue').textContent = Math.max(0, gameState.health);
+            document.getElementById('missedValue').textContent = gameState.missedShots;
+            document.getElementById('hitValue').textContent = gameState.hitShots;
+            
+            const healthPercent = (Math.max(0, gameState.health) / gameState.maxHealth) * 100;
+            document.getElementById('healthBar').style.width = healthPercent + '%';
+            
+            // Change color based on health
+            const bar = document.getElementById('healthBar');
+            if (healthPercent > 50) {
+                bar.style.background = 'linear-gradient(90deg, #4CAF50, #45a049)';
+            } else if (healthPercent > 20) {
+                bar.style.background = 'linear-gradient(90deg, #FFC107, #FF9800)';
+            } else {
+                bar.style.background = 'linear-gradient(90deg, #F44336, #E91E63)';
+            }
+        }
+        
+        // ============ END GAME ============
+        function endGame(message) {
+            gameState.gameOver = true;
+            
+            document.getElementById('gameOverScreen').style.display = 'flex';
+            document.getElementById('gameOverMessage').textContent = message;
+            document.getElementById('totalMissed').textContent = gameState.missedShots;
+            document.getElementById('totalHit').textContent = gameState.hitShots;
+            
+            // Cleanup falling numbers and bullets
+            for (let num of fallingNumbers) {
+                num.mesh.dispose();
+            }
+            for (let bullet of bullets) {
+                bullet.mesh.dispose();
+            }
+        }
+        
+        // ============ RESTART GAME ============
+        document.getElementById('restartBtn').addEventListener('click', () => {
+            location.reload();
+        });
+        
+        // ============ WINDOW RESIZE ============
+        window.addEventListener('resize', () => {
+            engine.resize();
+        });
+        
+        // Start game
         createScene();
     </script>
 </body>
